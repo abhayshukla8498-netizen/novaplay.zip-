@@ -264,5 +264,31 @@ jobs:
           }
           EOF
 
+      - name: Generate Keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore my-upload-key.jks \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -alias upload \
+            -storepass android123 \
+            -keypass android123 \
+            -dname "CN=Vidiopen, OU=App, O=Vidiopen, L=Balrampur, ST=UP, C=IN"
 
-      
+      - name: Build Signed APK
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
+          STORE_PASSWORD: android123
+          KEY_PASSWORD: android123
+        run: |
+          gradle wrapper --gradle-version 8.9
+          chmod +x ./gradlew
+          ./gradlew :app:assembleRelease --no-daemon -x test -x lint
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vidiopen-Release-APK
+          path: app/build/outputs/apk/release/*.apk
+          
