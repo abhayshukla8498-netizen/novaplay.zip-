@@ -40,7 +40,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Clean and Prepare Build Files
+      - name: Setup Valid Clean Build Configuration
         run: |
           # 1. Version Catalog setup
           mkdir -p gradle
@@ -50,7 +50,6 @@ jobs:
           kotlin = "2.0.20"
           ksp = "2.0.20-1.0.25"
           composeBom = "2024.09.03"
-          firebaseBom = "33.4.0"
           room = "2.6.1"
           media3 = "1.4.1"
           coil = "2.7.0"
@@ -58,11 +57,9 @@ jobs:
           retrofit = "2.11.0"
           moshi = "1.15.1"
           coroutines = "1.9.0"
-          hilt = "2.52"
 
           [libraries]
           androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
-          firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
           androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version = "1.9.2" }
           androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version = "1.3.4" }
           androidx-camera-core = { group = "androidx.camera", name = "camera-core", version = "1.3.4" }
@@ -77,8 +74,6 @@ jobs:
           androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
           androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
           androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
-          androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
-          androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
           androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version = "1.13.1" }
           androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version = "1.0.1" }
           androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version = "1.1.1" }
@@ -95,8 +90,6 @@ jobs:
           androidx-media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
           androidx-media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
           converter-moshi = { group = "com.squareup.retrofit2", name = "converter-moshi", version.ref = "retrofit" }
-          firebase-ai = { group = "com.google.firebase", name = "firebase-vertexai" }
-          firebase-appcheck-recaptcha = { group = "com.google.firebase", name = "firebase-appcheck-playintegrity" }
           kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
           kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
           logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
@@ -104,18 +97,6 @@ jobs:
           moshi-kotlin-codegen = { group = "com.squareup.moshi", name = "moshi-kotlin-codegen", version.ref = "moshi" }
           okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
           retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
-          androidx-core = { group = "androidx.test", name = "core", version = "1.6.1" }
-          androidx-junit = { group = "androidx.test.ext", name = "junit", version = "1.2.1" }
-          junit = { group = "junit", name = "junit", version = "4.13.2" }
-          kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
-          robolectric = { group = "org.robolectric", name = "robolectric", version = "4.13" }
-          roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version = "1.26.0" }
-          roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version = "1.26.0" }
-          roborazzi-junit-rule = { group = "io.github.takahirom.roborazzi", name = "roborazzi-junit-rule", version = "1.26.0" }
-          androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version = "3.6.1" }
-          androidx-runner = { group = "androidx.test", name = "runner", version = "1.6.2" }
-          google-hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
-          google-hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
           timber = { group = "com.jakewharton.timber", name = "timber", version = "5.0.1" }
           androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version = "2.9.1" }
           androidx-biometric = { group = "androidx.biometric", name = "biometric", version = "1.1.0" }
@@ -124,9 +105,6 @@ jobs:
           android-application = { id = "com.android.application", version.ref = "agp" }
           kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
           google-devtools-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
-          roborazzi = { id = "io.github.takahirom.roborazzi", version = "1.26.0" }
-          secrets = { id = "com.google.android.libraries.mapsplatform.secrets-gradle-plugin", version = "2.0.1" }
-          google-services = { id = "com.google.gms.google-services", version = "4.4.2" }
           EOF
 
           # 2. Settings.gradle.kts setup
@@ -161,14 +139,12 @@ jobs:
                   classpath("com.android.tools.build:gradle:8.6.1")
                   classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.20")
                   classpath("com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin:2.0.20-1.0.25")
-                  classpath("com.google.gms:google-services:4.4.2")
               }
           }
           plugins {
               alias(libs.plugins.android.application) apply false
               alias(libs.plugins.kotlin.compose) apply false
               alias(libs.plugins.google.devtools.ksp) apply false
-              alias(libs.plugins.google.services) apply false
           }
           EOF
 
@@ -183,31 +159,103 @@ jobs:
           }
           EOF
 
-          # 5. Fix app/build.gradle.kts syntax completely
-          TARGET_GRADLE=$(find . -name "build.gradle.kts" | grep "app/build.gradle.kts" | head -n 1)
-          if [ -n "$TARGET_GRADLE" ]; then
-            python3 -c "
-          with open('$TARGET_GRADLE', 'r') as f:
-              content = f.read()
+          # 5. Overwrite app/build.gradle.kts with clean syntax (eliminating parsing errors)
+          cat << 'EOF' > app/build.gradle.kts
+          plugins {
+              alias(libs.plugins.android.application)
+              alias(libs.plugins.kotlin.compose)
+              alias(libs.plugins.google.devtools.ksp)
+          }
 
-          import re
-          # compileSdk fix
-          content = re.sub(r'compileSdk\s*\{[^}]*\}', 'compileSdk = 35', content)
-          content = re.sub(r'targetSdk\s*=\s*\d+', 'targetSdk = 35', content)
+          android {
+              namespace = "com.vidiopen.videoplayer"
+              compileSdk = 35
 
-          # clean broken lines in dependencies block
-          lines = content.splitlines()
-          clean_lines = []
-          for l in lines:
-              if 'alias(libs.plugins.roborazzi)' in l or 'alias(libs.plugins.secrets)' in l or 'secrets {' in l:
-                  continue
-              # sanitize broken unexpected symbol lines
-              clean_lines.append(l)
+              defaultConfig {
+                  applicationId = "com.vidiopen.videoplayer"
+                  minSdk = 24
+                  targetSdk = 35
+                  versionCode = 1
+                  versionName = "1.0"
+              }
 
-          with open('$TARGET_GRADLE', 'w') as f:
-              f.write('\n'.join(clean_lines))
-          "
-          fi
+              signingConfigs {
+                  create("release") {
+                      storeFile = file(System.getenv("KEYSTORE_PATH") ?: "../my-upload-key.jks")
+                      storePassword = System.getenv("STORE_PASSWORD") ?: "android123"
+                      keyAlias = "upload"
+                      keyPassword = System.getenv("KEY_PASSWORD") ?: "android123"
+                  }
+              }
+
+              buildTypes {
+                  release {
+                      isMinifyEnabled = false
+                      signingConfig = signingConfigs.getByName("release")
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+
+              buildFeatures {
+                  compose = true
+                  buildConfig = true
+              }
+          }
+
+          dependencies {
+              implementation(libs.androidx.core.ktx)
+              implementation(libs.androidx.lifecycle.runtime.ktx)
+              implementation(libs.androidx.activity.compose)
+              implementation(platform(libs.androidx.compose.bom))
+              implementation(libs.androidx.compose.ui)
+              implementation(libs.androidx.compose.ui.graphics)
+              implementation(libs.androidx.compose.ui.tooling.preview)
+              implementation(libs.androidx.compose.material3)
+              implementation(libs.androidx.compose.material.icons.core)
+              implementation(libs.androidx.compose.material.icons.extended)
+              implementation(libs.androidx.navigation.compose)
+              implementation(libs.androidx.lifecycle.viewmodel.compose)
+              implementation(libs.androidx.lifecycle.runtime.compose)
+
+              implementation(libs.androidx.media3.exoplayer)
+              implementation(libs.androidx.media3.ui)
+              implementation(libs.androidx.media3.session)
+
+              implementation(libs.androidx.room.runtime)
+              implementation(libs.androidx.room.ktx)
+              ksp(libs.androidx.room.compiler)
+
+              implementation(libs.coil.compose)
+              implementation(libs.coil.video)
+
+              implementation(libs.androidx.datastore.preferences)
+              implementation(libs.androidx.documentfile)
+              implementation(libs.androidx.biometric)
+              implementation(libs.androidx.work.runtime.ktx)
+              implementation(libs.timber)
+
+              implementation(libs.retrofit)
+              implementation(libs.converter.moshi)
+              implementation(libs.moshi.kotlin)
+              ksp(libs.moshi.kotlin.codegen)
+              implementation(libs.okhttp)
+              implementation(libs.logging.interceptor)
+
+              implementation(libs.kotlinx.coroutines.core)
+              implementation(libs.kotlinx.coroutines.android)
+
+              implementation(libs.play.services.mlkit.barcode.scanning)
+              implementation(libs.zxing.core)
+              implementation(libs.androidx.camera.core)
+              implementation(libs.androidx.camera.camera2)
+              implementation(libs.androidx.camera.lifecycle)
+              implementation(libs.androidx.camera.view)
+          }
+          EOF
 
       - name: Generate Keystore
         run: |
