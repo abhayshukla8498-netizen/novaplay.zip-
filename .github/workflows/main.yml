@@ -16,6 +16,27 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Auto Find and Unzip Project
+        run: |
+          echo "Finding zip file..."
+          ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
+          if [ -n "$ZIP_FILE" ]; then
+            echo "Found zip archive: $ZIP_FILE. Extracting..."
+            unzip -o "$ZIP_FILE" -d extracted_project
+            # Agar zip ke andar koi nested folder hai, files ko bahar layein
+            if [ -d "extracted_project/app" ]; then
+              cp -r extracted_project/* .
+            else
+              SUBDIR=$(find extracted_project -mindepth 1 -maxdepth 1 -type d | head -n 1)
+              if [ -n "$SUBDIR" ]; then
+                cp -r "$SUBDIR"/* .
+              fi
+            fi
+            rm -rf extracted_project
+          else
+            echo "No zip file found, using repository root files."
+          fi
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -28,16 +49,14 @@ jobs:
 
       - name: Ensure Necessary Configuration Files
         run: |
-          # 1. Create .env if missing (required by secrets gradle plugin)
+          # 1. Create .env if missing
           if [ ! -f ".env" ]; then
-            echo "Creating placeholder .env file..."
             echo "GEMINI_API_KEY=dummy_key_placeholder" > .env
           fi
 
-          # 2. Create google-services.json if missing (prevents build failure)
+          # 2. Create google-services.json if missing
           mkdir -p app
           if [ ! -f "app/google-services.json" ]; then
-            echo "Creating dummy google-services.json..."
             cat << 'EOF' > app/google-services.json
           {
             "project_info": {
@@ -65,6 +84,13 @@ jobs:
           EOF
           fi
 
+      - name: Fix CompileSDK Syntax If Present
+        run: |
+          if [ -f "app/build.gradle.kts" ]; then
+            sed -i 's/compileSdk { version = release(36) { minorApiLevel = 1 } }/compileSdk = 35/g' app/build.gradle.kts
+            sed -i 's/targetSdk = 36/targetSdk = 35/g' app/build.gradle.kts
+          fi
+
       - name: Generate Release Keystore
         run: |
           keytool -genkeypair -v \
@@ -77,10 +103,10 @@ jobs:
             -keypass android123 \
             -dname "CN=Vidiopen, OU=Mobile, O=Vidiopen, L=Balrampur, ST=UP, C=IN"
 
-      - name: Ensure Executable Gradlew or Fallback
+      - name: Ensure Gradle Wrapper Executable
         run: |
           if [ ! -f "./gradlew" ]; then
-            echo "Gradle wrapper not found, generating wrapper using gradle 8.9..."
+            echo "Generating wrapper using gradle 8.9..."
             gradle wrapper --gradle-version 8.9
           fi
           chmod +x ./gradlew
@@ -96,7 +122,7 @@ jobs:
       - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Vidiopen-Signed-APK
+          name: Vidiopen-Release-APK
           path: app/build/outputs/apk/release/*.apk
           retention-days: 7
           
