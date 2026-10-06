@@ -19,25 +19,20 @@ jobs:
       - name: Extract ZIP and Locate App
         run: |
           set -e
-          echo "Finding zip file in repository..."
           ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
           if [ -n "$ZIP_FILE" ]; then
             echo "Extracting $ZIP_FILE..."
             mkdir -p /tmp/extracted_proj
             unzip -q -o "$ZIP_FILE" -d /tmp/extracted_proj
             
-            # Find directory containing 'app' folder
             SRC_DIR=$(find /tmp/extracted_proj -type d -name "app" | head -n 1 | xargs -r dirname)
             if [ -n "$SRC_DIR" ]; then
-              echo "Moving files from $SRC_DIR to workspace root..."
               cp -rf "$SRC_DIR"/* .
             else
               cp -rf /tmp/extracted_proj/* .
             fi
             rm -rf /tmp/extracted_proj
           fi
-          echo "Current workspace content:"
-          ls -la
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -45,9 +40,8 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Reconstruct Missing Root and Version Catalog Files
+      - name: Prepare Root Build and Catalog Files
         run: |
-          # 1. Missing gradle/libs.versions.toml banayein
           mkdir -p gradle
           cat << 'EOF' > gradle/libs.versions.toml
           [versions]
@@ -134,8 +128,41 @@ jobs:
           google-services = { id = "com.google.gms.google-services", version = "4.4.2" }
           EOF
 
-          # 2. Root build.gradle.kts banayein
+          cat << 'EOF' > settings.gradle.kts
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "novaplay"
+          include(":app")
+          EOF
+
           cat << 'EOF' > build.gradle.kts
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+              dependencies {
+                  classpath("com.android.tools.build:gradle:8.6.1")
+                  classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.20")
+                  classpath("com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin:2.0.20-1.0.25")
+                  classpath("com.google.gms:google-services:4.4.2")
+                  classpath("com.google.android.libraries.mapsplatform.secrets-gradle-plugin:secrets-gradle-plugin:2.0.1")
+                  classpath("io.github.takahirom.roborazzi:roborazzi-gradle-plugin:1.26.0")
+              }
+          }
           plugins {
               alias(libs.plugins.android.application) apply false
               alias(libs.plugins.kotlin.compose) apply false
@@ -146,28 +173,7 @@ jobs:
           }
           EOF
 
-          # 3. Root settings.gradle.kts banayein
-          cat << 'EOF' > settings.gradle.kts
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "novaplay"
-          include(":app")
-          EOF
-
-          # 4. Dummy env & google services
-          echo "GEMINI_API_KEY=dummy_key_build" > .env
+          echo "GEMINI_API_KEY=dummy_key" > .env
           mkdir -p app
           cat << 'EOF' > app/google-services.json
           {
@@ -177,7 +183,6 @@ jobs:
           }
           EOF
 
-          # 5. Fix CompileSdk safely
           TARGET_GRADLE=$(find . -name "build.gradle.kts" | grep "app/build.gradle.kts" | head -n 1)
           if [ -n "$TARGET_GRADLE" ]; then
             python3 -c "
@@ -211,7 +216,7 @@ jobs:
         run: |
           gradle wrapper --gradle-version 8.9
           chmod +x ./gradlew
-          ./gradlew :app:assembleRelease --no-daemon -x test
+          ./gradlew assembleRelease --no-daemon -x test
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
