@@ -16,24 +16,28 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Extract ZIP and Setup Clean Project Root
+      - name: Extract ZIP and Locate App
         run: |
           set -e
-          # 1. Zip dhoondh kar extract karna
+          echo "Finding zip file in repository..."
           ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
           if [ -n "$ZIP_FILE" ]; then
             echo "Extracting $ZIP_FILE..."
-            unzip -q -o "$ZIP_FILE" -d temp_zip_out
-            if [ -d "temp_zip_out/app" ]; then
-              cp -rf temp_zip_out/* .
+            mkdir -p /tmp/extracted_proj
+            unzip -q -o "$ZIP_FILE" -d /tmp/extracted_proj
+            
+            # Find directory containing 'app' folder
+            SRC_DIR=$(find /tmp/extracted_proj -type d -name "app" | head -n 1 | xargs -r dirname)
+            if [ -n "$SRC_DIR" ]; then
+              echo "Moving files from $SRC_DIR to workspace root..."
+              cp -rf "$SRC_DIR"/* .
             else
-              APP_DIR=$(find temp_zip_out -type d -name "app" | head -n 1)
-              if [ -n "$APP_DIR" ]; then
-                cp -rf "$(dirname "$APP_DIR")"/* .
-              fi
+              cp -rf /tmp/extracted_proj/* .
             fi
-            rm -rf temp_zip_out
+            rm -rf /tmp/extracted_proj
           fi
+          echo "Current workspace content:"
+          ls -la
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -43,7 +47,7 @@ jobs:
 
       - name: Reconstruct Missing Root and Version Catalog Files
         run: |
-          # 1. Missing gradle/libs.versions.toml create karein
+          # 1. Missing gradle/libs.versions.toml banayein
           mkdir -p gradle
           cat << 'EOF' > gradle/libs.versions.toml
           [versions]
@@ -130,7 +134,7 @@ jobs:
           google-services = { id = "com.google.gms.google-services", version = "4.4.2" }
           EOF
 
-          # 2. Root build.gradle.kts create karein
+          # 2. Root build.gradle.kts banayein
           cat << 'EOF' > build.gradle.kts
           plugins {
               alias(libs.plugins.android.application) apply false
@@ -142,7 +146,7 @@ jobs:
           }
           EOF
 
-          # 3. Root settings.gradle.kts create karein
+          # 3. Root settings.gradle.kts banayein
           cat << 'EOF' > settings.gradle.kts
           pluginManagement {
               repositories {
@@ -162,7 +166,7 @@ jobs:
           include(":app")
           EOF
 
-          # 4. Dummy files
+          # 4. Dummy env & google services
           echo "GEMINI_API_KEY=dummy_key_build" > .env
           mkdir -p app
           cat << 'EOF' > app/google-services.json
@@ -173,17 +177,19 @@ jobs:
           }
           EOF
 
-          # 5. Fix CompileSdk in app/build.gradle.kts
-          python3 -c '
+          # 5. Fix CompileSdk safely
+          TARGET_GRADLE=$(find . -name "build.gradle.kts" | grep "app/build.gradle.kts" | head -n 1)
+          if [ -n "$TARGET_GRADLE" ]; then
+            python3 -c "
           import re
-          path = "app/build.gradle.kts"
-          with open(path, "r") as f:
-              content = f.read()
-          content = re.sub(r"compileSdk\s*\{[^}]*\}", "compileSdk = 35", content)
-          content = re.sub(r"targetSdk\s*=\s*\d+", "targetSdk = 35", content)
-          with open(path, "w") as f:
-              f.write(content)
-          '
+          with open('$TARGET_GRADLE', 'r') as f:
+              c = f.read()
+          c = re.sub(r'compileSdk\s*\{[^}]*\}', 'compileSdk = 35', c)
+          c = re.sub(r'targetSdk\s*=\s*\d+', 'targetSdk = 35', c)
+          with open('$TARGET_GRADLE', 'w') as f:
+              f.write(c)
+          "
+          fi
 
       - name: Generate Keystore
         run: |
