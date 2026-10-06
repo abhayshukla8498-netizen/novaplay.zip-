@@ -16,24 +16,37 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Auto Extract ZIP File
+      - name: Extract ZIP and Align Project Root
         run: |
           set -e
-          ZIP_NAME=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
-          if [ -n "$ZIP_NAME" ]; then
-            echo "Found: $ZIP_NAME, extracting..."
-            unzip -q -o "$ZIP_NAME" -d extracted_temp
-            if [ -d "extracted_temp/app" ]; then
-              cp -rf extracted_temp/* .
-            else
-              NESTED_DIR=$(find extracted_temp -mindepth 1 -maxdepth 2 -type d -name "app" | head -n 1)
-              if [ -n "$NESTED_DIR" ]; then
-                PARENT_DIR=$(dirname "$NESTED_DIR")
-                cp -rf "$PARENT_DIR"/* .
+          echo "Current directory files before extraction:"
+          ls -la
+
+          # 1. Agar zip file exist karti hai toh extract karein
+          ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
+          if [ -n "$ZIP_FILE" ]; then
+            echo "Extracting: $ZIP_FILE"
+            unzip -q -o "$ZIP_FILE" -d extracted_unzip_folder
+            
+            # Agar zip ke andar kisi folder me settings.gradle ya app folder hai, to use root me move karein
+            TARGET_DIR=$(find extracted_unzip_folder -type f -name "build.gradle*" | head -n 1 | xargs -r dirname)
+            if [ -n "$TARGET_DIR" ]; then
+              # Agar build.gradle app folder ke andar mila, to uska parent project root hoga
+              if [ "$(basename "$TARGET_DIR")" = "app" ]; then
+                PROJECT_ROOT=$(dirname "$TARGET_DIR")
+              else
+                PROJECT_ROOT="$TARGET_DIR"
               fi
+              echo "Moving files from $PROJECT_ROOT to repository root..."
+              cp -rf "$PROJECT_ROOT"/* .
+            else
+              cp -rf extracted_unzip_folder/* .
             fi
-            rm -rf extracted_temp
+            rm -rf extracted_unzip_folder
           fi
+
+          echo "Files in root after aligning:"
+          ls -la
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -43,12 +56,12 @@ jobs:
 
       - name: Prepare Configurations and Dummy Keys
         run: |
-          # 1. Dummy .env create
+          # 1. Dummy .env banayein agar nahi hai
           if [ ! -f ".env" ]; then
             echo "GEMINI_API_KEY=dummy_key_build" > .env
           fi
 
-          # 2. Dummy google-services.json create
+          # 2. Dummy google-services.json banayein agar app folder me nahi hai
           mkdir -p app
           if [ ! -f "app/google-services.json" ]; then
             cat << 'EOF' > app/google-services.json
@@ -78,7 +91,30 @@ jobs:
           EOF
           fi
 
-          # 3. Fix compileSdk syntax if broken
+          # 3. Settings file verify / create
+          if [ ! -f "settings.gradle.kts" ] && [ ! -f "settings.gradle" ]; then
+            echo "Creating fallback settings.gradle.kts..."
+            cat << 'EOF' > settings.gradle.kts
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "novaplay"
+          include(":app")
+          EOF
+          fi
+
+          # 4. Fix compileSdk syntax agar app/build.gradle.kts me issue ho
           if [ -f "app/build.gradle.kts" ]; then
             sed -i 's/compileSdk { version = release(36) { minorApiLevel = 1 } }/compileSdk = 35/g' app/build.gradle.kts
             sed -i 's/targetSdk = 36/targetSdk = 35/g' app/build.gradle.kts
@@ -103,7 +139,7 @@ jobs:
           KEY_PASSWORD: android123
         run: |
           if [ ! -f "./gradlew" ]; then
-            echo "Installing standard gradle wrapper..."
+            echo "Generating wrapper using gradle 8.9..."
             gradle wrapper --gradle-version 8.9
           fi
           chmod +x ./gradlew
