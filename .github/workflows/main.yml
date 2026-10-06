@@ -1,0 +1,102 @@
+name: Build Vidiopen Signed Release APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    name: Build Signed Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Ensure Necessary Configuration Files
+        run: |
+          # 1. Create .env if missing (required by secrets gradle plugin)
+          if [ ! -f ".env" ]; then
+            echo "Creating placeholder .env file..."
+            echo "GEMINI_API_KEY=dummy_key_placeholder" > .env
+          fi
+
+          # 2. Create google-services.json if missing (prevents build failure)
+          mkdir -p app
+          if [ ! -f "app/google-services.json" ]; then
+            echo "Creating dummy google-services.json..."
+            cat << 'EOF' > app/google-services.json
+          {
+            "project_info": {
+              "project_number": "1234567890",
+              "project_id": "vidiopen-dummy",
+              "storage_bucket": "vidiopen-dummy.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:1234567890:android:abcdef123456",
+                  "android_client_info": {
+                    "package_name": "com.vidiopen.videoplayer"
+                  }
+                },
+                "oauth_client": [],
+                "api_key": [{ "current_key": "dummy_api_key_for_build" }],
+                "services": {
+                  "appinvite_service": { "other_platform_oauth_client": [] }
+                }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
+          fi
+
+      - name: Generate Release Keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore my-upload-key.jks \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -alias upload \
+            -storepass android123 \
+            -keypass android123 \
+            -dname "CN=Vidiopen, OU=Mobile, O=Vidiopen, L=Balrampur, ST=UP, C=IN"
+
+      - name: Ensure Executable Gradlew or Fallback
+        run: |
+          if [ ! -f "./gradlew" ]; then
+            echo "Gradle wrapper not found, generating wrapper using gradle 8.9..."
+            gradle wrapper --gradle-version 8.9
+          fi
+          chmod +x ./gradlew
+
+      - name: Build Release APK
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
+          STORE_PASSWORD: android123
+          KEY_PASSWORD: android123
+        run: |
+          ./gradlew clean :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Upload Release APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vidiopen-Signed-APK
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 7
+          
