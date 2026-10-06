@@ -16,23 +16,28 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Extract ZIP and Locate App
+      - name: Extract ZIP and Force Root Alignment
         run: |
           set -e
           ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
           if [ -n "$ZIP_FILE" ]; then
-            echo "Extracting $ZIP_FILE..."
-            mkdir -p /tmp/extracted_proj
-            unzip -q -o "$ZIP_FILE" -d /tmp/extracted_proj
+            echo "Found archive: $ZIP_FILE. Extracting..."
+            mkdir -p /tmp/unpacked
+            unzip -q -o "$ZIP_FILE" -d /tmp/unpacked
             
-            SRC_DIR=$(find /tmp/extracted_proj -type d -name "app" | head -n 1 | xargs -r dirname)
-            if [ -n "$SRC_DIR" ]; then
-              cp -rf "$SRC_DIR"/* .
+            # App directory dhoondhein
+            APP_PATH=$(find /tmp/unpacked -type d -name "app" | head -n 1)
+            if [ -n "$APP_PATH" ]; then
+              PROJECT_BASE=$(dirname "$APP_PATH")
+              echo "Moving project from $PROJECT_BASE to root..."
+              cp -rf "$PROJECT_BASE"/* .
             else
-              cp -rf /tmp/extracted_proj/* .
+              cp -rf /tmp/unpacked/* .
             fi
-            rm -rf /tmp/extracted_proj
+            rm -rf /tmp/unpacked
           fi
+          echo "Workspace root check:"
+          ls -la
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -40,8 +45,9 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Prepare Root Build and Catalog Files
+      - name: Setup Version Catalog and Project Configs
         run: |
+          # 1. Version Catalog setup
           mkdir -p gradle
           cat << 'EOF' > gradle/libs.versions.toml
           [versions]
@@ -128,6 +134,7 @@ jobs:
           google-services = { id = "com.google.gms.google-services", version = "4.4.2" }
           EOF
 
+          # 2. Settings.gradle.kts setup
           cat << 'EOF' > settings.gradle.kts
           pluginManagement {
               repositories {
@@ -147,22 +154,8 @@ jobs:
           include(":app")
           EOF
 
+          # 3. Root build.gradle.kts setup
           cat << 'EOF' > build.gradle.kts
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-              dependencies {
-                  classpath("com.android.tools.build:gradle:8.6.1")
-                  classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.20")
-                  classpath("com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin:2.0.20-1.0.25")
-                  classpath("com.google.gms:google-services:4.4.2")
-                  classpath("com.google.android.libraries.mapsplatform.secrets-gradle-plugin:secrets-gradle-plugin:2.0.1")
-                  classpath("io.github.takahirom.roborazzi:roborazzi-gradle-plugin:1.26.0")
-              }
-          }
           plugins {
               alias(libs.plugins.android.application) apply false
               alias(libs.plugins.kotlin.compose) apply false
@@ -173,6 +166,7 @@ jobs:
           }
           EOF
 
+          # 4. Dummy env & google services
           echo "GEMINI_API_KEY=dummy_key" > .env
           mkdir -p app
           cat << 'EOF' > app/google-services.json
@@ -183,15 +177,15 @@ jobs:
           }
           EOF
 
-          TARGET_GRADLE=$(find . -name "build.gradle.kts" | grep "app/build.gradle.kts" | head -n 1)
-          if [ -n "$TARGET_GRADLE" ]; then
+          # 5. Fix CompileSdk in app/build.gradle.kts
+          if [ -f "app/build.gradle.kts" ]; then
             python3 -c "
           import re
-          with open('$TARGET_GRADLE', 'r') as f:
+          with open('app/build.gradle.kts', 'r') as f:
               c = f.read()
           c = re.sub(r'compileSdk\s*\{[^}]*\}', 'compileSdk = 35', c)
           c = re.sub(r'targetSdk\s*=\s*\d+', 'targetSdk = 35', c)
-          with open('$TARGET_GRADLE', 'w') as f:
+          with open('app/build.gradle.kts', 'w') as f:
               f.write(c)
           "
           fi
@@ -216,7 +210,7 @@ jobs:
         run: |
           gradle wrapper --gradle-version 8.9
           chmod +x ./gradlew
-          ./gradlew assembleRelease --no-daemon -x test
+          ./gradlew :app:assembleRelease --no-daemon -x test --stacktrace
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
